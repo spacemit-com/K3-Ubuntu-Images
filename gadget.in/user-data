@@ -1,12 +1,20 @@
 #cloud-config
 chpasswd:
-  expire: True
+  expire: true
   users:
     - name: ubuntu
       password: "$6$l6pDHHlFk7RRc0hD$iNSvrkA7.rGM2fj51qX21HxTRjn/dMwmV\
                  G4d7tSKBbgfFU/yzjLRx5N3/px8FKUNk4Di27ixyrDnrEn.wIrr8."
       type: hash
 runcmd:
+  - echo "SpacemiT K3 Pico-ITX" > /etc/flash-kernel/machine
+  - |
+    cat > /etc/flash-kernel/db << EOF
+    Model: SpacemiT K3 Pico-ITX
+    Kernel-Flavors: any
+    DTB-Id: spacemit/k3_deb1.dtb
+    EOF
+  - flash-kernel
   - grub-install
   - update-grub
   - rm -rf /boot/extlinux/
