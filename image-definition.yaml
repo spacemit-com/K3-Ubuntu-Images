@@ -5,7 +5,7 @@ revision: 1
 architecture: riscv64
 series: resolute
 class: preinstalled
-kernel: linux-image-generic
+kernel: linux-k3-6.12
 gadget:
   type: "directory"
   url: "file://gadget.in"
@@ -29,6 +29,10 @@ rootfs:
       - minimal
       - standard
 customization:
+  extra-ppas:
+    -
+      name: esmil/ppa
+      fingerprint: C5B75CD85D1916F42DF92023F0A7B59173223CBB
   extra-packages:
     - name: "flash-kernel"
     - name: "grub-efi-riscv64"
