@@ -4,35 +4,6 @@ volumes:
     schema: gpt
     bootloader: grub
     structure:
-      - name: sifive_unmatched_u-boot_itb
-        size: 16M
-        # random value for type
-        type: 537B4768-474D-42EB-99C7-D8BCE5A57079
-        offset: 1065984
-        size: 16M
-        content:
-          - image: u-boot-sifive-unmatched/u-boot.itb
-      - name: starfive_visionfive_2_u-boot
-        # random value for type
-        type: 816E2DB1-6FE4-4797-B3FF-2DE37CB85318
-        size: 16M
-        content:
-          - image: u-boot-starfive/u-boot.itb
-      - name: sifive_unmatched_u-boot-spl
-        type: 5B193300-FC78-40CD-8002-E86C45580B47
-        size: 1M
-        content:
-          - image: u-boot-sifive-unmatched/u-boot-spl.bin
-      - name: starfive_visionfive_2_u-boot-spl
-        type: 2E54B353-1271-4842-806F-E436D6AF6985
-        size: 1M
-        content:
-          - image: u-boot-starfive/u-boot-spl.bin.normal.out
-      - name: microchip_icicle_u-boot
-        type: 21686148-6449-6E6F-744E-656564454649
-        size: 16M
-        content:
-          - image: u-boot-microchip/u-boot.payload
       - name: EFI System
         type: C12A7328-F81F-11D2-BA4B-00A0C93EC93B
         filesystem: vfat
