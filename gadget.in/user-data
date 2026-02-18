@@ -1,0 +1,12 @@
+#cloud-config
+chpasswd:
+  expire: True
+  users:
+    - name: ubuntu
+      password: "$6$l6pDHHlFk7RRc0hD$iNSvrkA7.rGM2fj51qX21HxTRjn/dMwmV\
+                 G4d7tSKBbgfFU/yzjLRx5N3/px8FKUNk4Di27ixyrDnrEn.wIrr8."
+      type: hash
+runcmd:
+  - grub-install
+  - update-grub
+  - rm -rf /boot/extlinux/

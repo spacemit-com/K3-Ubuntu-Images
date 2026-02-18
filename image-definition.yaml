@@ -1,0 +1,53 @@
+---
+name: ubuntu-server-riscv64-preinstalled
+display-name: Ubuntu Server RISC-V preinstalled
+revision: 1
+architecture: riscv64
+series: resolute
+class: preinstalled
+kernel: linux-image-generic
+gadget:
+  type: "directory"
+  url: "file://gadget.in"
+rootfs:
+  archive: ubuntu
+  sources-list-deb822: true
+  components:
+    - main
+    - restricted
+    - universe
+    - multiverse
+  mirror: "http://ports.ubuntu.com/ubuntu-ports/"
+  pocket: updates
+  seed:
+    urls:
+      - "https://git.launchpad.net/~ubuntu-core-dev/ubuntu-seeds/+git/"
+    branch: resolute
+    names:
+      - cloud-image
+      - server
+      - minimal
+      - standard
+customization:
+  extra-packages:
+    - name: "flash-kernel"
+    - name: "grub-efi-riscv64"
+  extra-snaps:
+    - name: snapd
+  fstab:
+    - label: "writable"
+      mountpoint: "/"
+      filesystem-type: "ext4"
+      dump: false
+      fsck-order: 1
+    - label: "esp"
+      mountpoint: "/boot/efi"
+      filesystem-type: "vfat"
+      mount-options: "defaults"
+      dump: false
+      fsck-order: 1
+artifacts:
+  img:
+    - name: ubuntu-26.04-preinstalled-server-riscv64.img
+  manifest:
+    name: ubuntu-26.04-preinstalled-server-riscv64.manifest
