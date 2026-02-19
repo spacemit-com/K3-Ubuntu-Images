@@ -10,7 +10,7 @@ runcmd:
   - echo "SpacemiT K3 Pico-ITX" > /etc/flash-kernel/machine
   - |
     cat > /etc/flash-kernel/db << EOF
-    Model: SpacemiT K3 Pico-ITX
+    Machine: SpacemiT K3 Pico-ITX
     Kernel-Flavors: any
     DTB-Id: spacemit/k3_deb1.dtb
     EOF
