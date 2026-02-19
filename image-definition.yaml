@@ -36,6 +36,7 @@ customization:
   extra-packages:
     - name: "flash-kernel"
     - name: "grub-efi-riscv64"
+    - name: "ubuntu-desktop"
   extra-snaps:
     - name: snapd
   fstab:
