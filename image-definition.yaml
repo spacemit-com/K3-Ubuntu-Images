@@ -30,8 +30,7 @@ rootfs:
       - standard
 customization:
   extra-ppas:
-    -
-      name: esmil/ppa
+    - name: esmil/ppa
       fingerprint: C5B75CD85D1916F42DF92023F0A7B59173223CBB
   extra-packages:
     - name: "flash-kernel"
@@ -51,6 +50,12 @@ customization:
       mount-options: "defaults"
       dump: false
       fsck-order: 1
+  manual:
+    copy-file:
+      - destination: "/etc/default/grub.d/60-console.cfg"
+        source: "grub.d/60-console.cfg"
+      - destination: "/etc/default/grub.d/60-plymouth.cfg"
+        source: "grub.d/60-plymouth.cfg"
 artifacts:
   img:
     - name: ubuntu-26.04-preinstalled-server-riscv64.img
