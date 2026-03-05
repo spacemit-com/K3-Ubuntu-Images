@@ -5,7 +5,7 @@ revision: 1
 architecture: riscv64
 series: resolute
 class: preinstalled
-kernel: linux-k3-6.12
+kernel: linux-k3-6.18
 gadget:
   type: "directory"
   url: "file://gadget.in"
@@ -30,8 +30,8 @@ rootfs:
       - standard
 customization:
   extra-ppas:
-    - name: esmil/ppa
-      fingerprint: C5B75CD85D1916F42DF92023F0A7B59173223CBB
+    - name: ubuntu-risc-v-team/k3
+      fingerprint: BD1DB3F88CA5F7825AF79D5552663FF2DFDC39CA
   extra-packages:
     - name: "flash-kernel"
     - name: "grub-efi-riscv64"

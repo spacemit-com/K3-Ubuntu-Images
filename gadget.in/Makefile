@@ -1,6 +1,6 @@
 SERIES ?= resolute
 DESTDIR ?= install
-FLAVOR ?= k3-6.12
+FLAVOR ?= k3-6.18
 
 all:
 	mkdir -p $(DESTDIR)
@@ -19,7 +19,7 @@ install/dtb:
 	rm -rf build
 	mkdir build
 	cd build && \
-	pull-ppa-debs --ppa=esmil/ppa -a riscv64 linux-$(FLAVOR) $(SERIES)
+	pull-ppa-debs --ppa=ubuntu-risc-v-team/k3 -a riscv64 linux-$(FLAVOR) $(SERIES)
 	cd build && dpkg -x linux-modules*.deb linux-modules/
 	mkdir -p $(DESTDIR)/dtb
 	cp -r ./build/linux-modules/usr/lib/firmware/*-$(FLAVOR)/device-tree/* \
