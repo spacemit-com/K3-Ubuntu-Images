@@ -15,9 +15,7 @@ Build image
 
 .. code-block:: bash
 
-    sudo ubuntu-image --debug classic image-definition.yaml
-
-For debugging add --workdir /tmp/workdir.
+    make
 
 First boot
 ----------
