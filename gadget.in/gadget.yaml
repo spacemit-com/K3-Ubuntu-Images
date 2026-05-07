@@ -2,11 +2,50 @@
 volumes:
   riscv:
     schema: gpt
-    bootloader: grub
+    bootloader: u-boot
     structure:
+      - name: env
+        # random value for type
+        type: 64c85018-d1b1-48bf-8d09-76a005ab67cc
+        offset: 655360
+        size: 65536
+        content:
+          - image: u-boot-spacemit/env.bin
+      - name: bootinfo
+        # random value for type
+        type: 1794f3bc-344b-47da-b2f5-c3c755d62cf8
+        offset: 1M
+        size: 131072
+        content:
+          - image: u-boot-spacemit/bootinfo_spinor.bin
+      - name: fsbl
+        type: a5ea2f6f-462b-4dc8-9d75-0a479ad90e90
+        offset: 1572864
+        size: 524288
+        content:
+          - image: u-boot-spacemit/FSBL.bin
+      - name: esos
+        # random value for type
+        type: 93389eb0-d147-44b7-bba2-0f37c4239b91
+        offset: 4M
+        size: 3M
+        content:
+          - image: esos/esos.itb
+      - name: opensbi
+        type: 1b6ac811-c308-4920-8f90-8e86596dfd02
+        offset: 7M
+        size: 1M
+        content:
+          - image: opensbi-spacemit/fw_dynamic.itb
+      - name: uboot
+        type: a5923b95-7159-4fe1-b51f-7693ec44f96d
+        offset: 8M
+        size: 4M
+        content:
+          - image: edk2/edk2.itb
       - name: EFI System
         type: C12A7328-F81F-11D2-BA4B-00A0C93EC93B
-        filesystem: vfat
+        filesystem: vfat-16
         filesystem-label: esp
         size: 100M
         role: system-boot
@@ -23,7 +62,7 @@ volumes:
         type: 0FC63DAF-8483-4772-8E79-3D69D8477DE4
         filesystem: vfat-16
         filesystem-label: CIDATA
-        size: 4M
+        size: 64M
         content:
           - source: cidata/meta-data
             target: meta-data
@@ -33,5 +72,5 @@ volumes:
         type: 0FC63DAF-8483-4772-8E79-3D69D8477DE4
         filesystem: ext4
         filesystem-label: writable
-        size: 3072M
+        size: 5120M
         role: system-data
