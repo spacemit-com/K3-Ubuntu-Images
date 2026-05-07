@@ -5,7 +5,7 @@ revision: 1
 architecture: riscv64
 series: resolute
 class: preinstalled
-kernel: linux-k3-6.18
+kernel: linux-image-spacemit-generic
 gadget:
   type: "directory"
   url: "file://gadget.in"
@@ -17,7 +17,7 @@ rootfs:
     - restricted
     - universe
     - multiverse
-  mirror: "http://ports.ubuntu.com/ubuntu-ports/"
+  mirror: "http://mirrors.ustc.edu.cn/ubuntu-ports/"
   pocket: updates
   seed:
     urls:
@@ -30,12 +30,14 @@ rootfs:
       - standard
 customization:
   extra-ppas:
-    - name: ubuntu-risc-v-team/k3
-      fingerprint: BD1DB3F88CA5F7825AF79D5552663FF2DFDC39CA
+    - name: "spacemit/k3"
+      fingerprint: "B4DD2D28C9C3837D30CD7EBAE6853B171243C347"
+      keep-enabled: true
   extra-packages:
     - name: "flash-kernel"
     - name: "grub-efi-riscv64"
     - name: "ubuntu-desktop"
+    - name: "img-gpu-powervr"
   extra-snaps:
     - name: snapd
   fstab:
@@ -56,6 +58,15 @@ customization:
         source: "grub.d/60-console.cfg"
       - destination: "/etc/default/grub.d/60-plymouth.cfg"
         source: "grub.d/60-plymouth.cfg"
+      - destination: "/etc/apt/preferences.d/spacemit"
+        source: "spacemit-ppa-preference"
+      - destination: "/usr/local/bin/setup-scripts.sh"
+        source: "setup-scripts.sh"
+      - destination: "/boot/grub/grub.cfg"
+        source: "grub.cfg"
+    execute:
+      - path: "/usr/local/bin/setup-scripts.sh"
+
 artifacts:
   img:
     - name: ubuntu-26.04-preinstalled-server-riscv64.img
