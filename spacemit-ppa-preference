@@ -1,0 +1,4 @@
+Package: *
+Pin: release o=LP-PPA-spacemit-k3, n=resolute
+Pin-Priority: 1100
+

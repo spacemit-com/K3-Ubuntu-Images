@@ -7,18 +7,7 @@ chpasswd:
                  G4d7tSKBbgfFU/yzjLRx5N3/px8FKUNk4Di27ixyrDnrEn.wIrr8."
       type: hash
 runcmd:
-  - echo "SpacemiT K3 deb1" > /etc/flash-kernel/machine
-  - |
-    cat > /etc/flash-kernel/db << EOF
-    Machine: SpacemiT K3 deb1
-    Kernel-Flavors: any
-    DTB-Id: spacemit/k3_deb1.dtb
-
-    Machine: SpacemiT K3 Pico-ITX
-    Kernel-Flavors: any
-    DTB-Id: spacemit/k3-pico-itx.dtb
-    EOF
-  - flash-kernel
+  - FK_IGNORE_EFI=yes flash-kernel
   - grub-install
   - update-grub
   - rm -rf /boot/extlinux/
