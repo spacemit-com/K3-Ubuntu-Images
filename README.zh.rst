@@ -76,10 +76,12 @@ EFI 系统分区、``CIDATA`` cloud-init 分区以及 ``ext4`` 格式的 ``writa
 Makefile 默认从
 ``workdir/scratch/gadget/install/u-boot-spacemit/u-boot.itb``
 读取 U-Boot FIT（本地 ``make image`` 完成后自动生成）。
-烧写下载镜像时可：
+烧写下载镜像时，如果该路径不存在，``make flash`` 会自动从 PPA
+拉取 ``u-boot-spacemit`` 包并解出 ``u-boot.itb``，无需手动操作。
 
-* 保留上次构建的 ``workdir/``，或
-* 直接调用 ``image_flash.py`` 并手动提供 ``temp/u-boot.itb``（见下文）。
+如需指定特定的 ``u-boot.itb``，可在命令行覆盖 ``UBOOT_ITB`` 变量::
+
+    make UBOOT_ITB=/path/to/u-boot.itb flash
 
 手动执行各步骤：
 
@@ -122,8 +124,7 @@ Makefile 默认从
 
 默认账户：``ubuntu`` / ``ubuntu``。
 
-镜像内置 ``ubuntu-desktop`` 及 PowerVR GPU 用户空间驱动；
-首次启动时会自动执行 ``apt-get full-upgrade`` 并恢复 systemd-resolved 符号链接。
+镜像内置 ``ubuntu-desktop`` 及 PowerVR GPU 用户空间驱动。
 
 仓库结构
 --------
@@ -139,7 +140,7 @@ Makefile 默认从
         user-data / meta-data   cloud-init NoCloud 配置
     grub.cfg                    rootfs /boot/grub/grub.cfg（UEFI 菜单）
     grub.d/                     /etc/default/grub.d 片段
-    setup-scripts.sh            镜像内定制脚本（apt 升级、恢复 resolv.conf）
+    setup-scripts.sh            镜像内定制脚本（apt 升级）
     spacemit-ppa-preference     spacemit/k3 PPA 的 APT 优先级固定
     Makefile                    镜像构建 + 烧写工作流入口
     image_flash.py              分区提取与 fastboot 驱动

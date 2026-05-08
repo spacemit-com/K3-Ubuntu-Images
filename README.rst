@@ -74,11 +74,13 @@ End-to-end with the bundled Makefile:
 
 The Makefile assumes the U-Boot FIT lives under
 ``workdir/scratch/gadget/install/u-boot-spacemit/u-boot.itb`` (true after a
-local ``make image``).  When flashing a downloaded image you can either:
+local ``make image``).  When flashing a downloaded image, if that path does
+not exist ``make flash`` will automatically fetch ``u-boot-spacemit`` from the
+PPA and extract ``u-boot.itb``; no manual step is required.
 
-* keep a previous build's ``workdir/`` around, or
-* run ``image_flash.py`` directly and provide ``temp/u-boot.itb`` yourself
-  (see below).
+To use a specific ``u-boot.itb``, override ``UBOOT_ITB`` on the command line::
+
+    make UBOOT_ITB=/path/to/u-boot.itb flash
 
 Run the steps manually:
 
@@ -121,8 +123,7 @@ First boot
 ----------
 
 Login as ``ubuntu`` / ``ubuntu``.  The image ships ``ubuntu-desktop`` and the
-PowerVR GPU userspace; first boot performs an ``apt-get full-upgrade`` and
-sets up the GRUB UEFI menu entry.
+PowerVR GPU userspace。
 
 Repository layout
 -----------------
@@ -138,7 +139,7 @@ Repository layout
         user-data / meta-data   cloud-init NoCloud
     grub.cfg                    rootfs /boot/grub/grub.cfg (UEFI menu)
     grub.d/                     /etc/default/grub.d snippets
-    setup-scripts.sh            in-image customization (apt upgrade, grub menu)
+    setup-scripts.sh            in-image customization (apt upgrade)
     spacemit-ppa-preference     APT pin for spacemit/k3 PPA
     Makefile                    image build + flash workflow entry points
     image_flash.py              extract & fastboot driver

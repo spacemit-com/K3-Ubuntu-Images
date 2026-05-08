@@ -31,7 +31,8 @@ PARTITION    ?= partition_universal.json
 FASTBOOT     ?= fastboot.yaml
 TEMP_DIR     ?= temp
 
-UBOOT_ITB    ?= $(WORKDIR)/scratch/gadget/install/u-boot-spacemit/u-boot.itb
+GADGET_INSTALL ?= $(WORKDIR)/scratch/gadget/install
+UBOOT_ITB      ?= $(WORKDIR)/scratch/gadget/install/u-boot-spacemit/u-boot.itb
 
 UBUNTU_IMAGE       ?= sudo ubuntu-image
 UBUNTU_IMAGE_FLAGS ?= --sector-size=4096 --workdir $(WORKDIR)
@@ -91,14 +92,16 @@ extract: $(IMG) $(PARTITION)
 	$(PYTHON) $(SCRIPT) --img $(IMG) --partition $(PARTITION)
 
 flash: check
-	@cp $(UBOOT_ITB) $(TEMP_DIR)/u-boot.itb
 	sudo $(PYTHON) $(SCRIPT) --fastboot $(FASTBOOT)
 
 check:
 	@test -d $(TEMP_DIR) || { \
 	    echo "ERROR: ./$(TEMP_DIR) not found. Run 'make extract' first."; exit 1; }
-	@test -f $(UBOOT_ITB) || { \
-	    echo "ERROR: $(UBOOT_ITB) not found."; exit 1; }
+	@if [ ! -f "$(UBOOT_ITB)" ]; then \
+	    echo "INFO: u-boot.itb not found, fetching from PPA..."; \
+	    $(MAKE) -C gadget.in install/u-boot DESTDIR=../$(GADGET_INSTALL); \
+	fi
+	@cp $(UBOOT_ITB) $(TEMP_DIR)/u-boot.itb
 	@command -v fastboot >/dev/null || { \
 	    echo "ERROR: fastboot not in PATH."; exit 1; }
 
