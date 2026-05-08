@@ -5,6 +5,7 @@
 #   make image-debug     # clean build with --debug
 #   make image-init      # stop before manual customization (-u perform_manual_customization)
 #   make image-continue  # resume previous workdir (-r)
+#   make compress        # compress $(IMG) to $(IMG).zst with zstd
 #
 # Flash workflow targets (image_flash.py):
 #   make extract         # extract partitions from $(IMG) into ./$(TEMP_DIR)
@@ -37,7 +38,7 @@ UBOOT_ITB      ?= $(WORKDIR)/scratch/gadget/install/u-boot-spacemit/u-boot.itb
 UBUNTU_IMAGE       ?= sudo ubuntu-image
 UBUNTU_IMAGE_FLAGS ?= --sector-size=4096 --workdir $(WORKDIR)
 
-.PHONY: help all image image-debug image-init image-continue \
+.PHONY: help all image image-debug image-init image-continue compress \
 	extract flash check clean
 
 # ---------------------------------------------------------------------------
@@ -50,6 +51,7 @@ help:
 	@echo "  image-debug      - clean build with --debug"
 	@echo "  image-init       - stop before manual customization"
 	@echo "  image-continue   - resume previous workdir (-r)"
+	@echo "  compress         - compress \$$(IMG) to \$$(IMG).zst (zstd)"
 	@echo ""
 	@echo "Flash workflow targets:"
 	@echo "  extract          - extract partitions from \$$(IMG) into ./$(TEMP_DIR)"
@@ -81,6 +83,9 @@ image-init:
 
 image-continue:
 	$(UBUNTU_IMAGE) $(UBUNTU_IMAGE_FLAGS) --debug -r classic $(IMG_DEF)
+
+compress: $(IMG)
+	sudo zstd -T0 -v --keep $(IMG)
 
 # ---------------------------------------------------------------------------
 # Flash workflow (image_flash.py + fastboot)

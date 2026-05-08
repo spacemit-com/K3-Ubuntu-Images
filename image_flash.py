@@ -6,6 +6,9 @@ Usage:
   # Extract all partition files from a GPT image into ./temp
   python image_flash.py --img card_boot.img --partition partition_universal.json
 
+  # Compressed images (.zst) are also supported
+  python image_flash.py --img card_boot.img.zst --partition partition_universal.json
+
   # Extract files from image, and do image flash operation through fastboot
   python image_flash.py --img card_boot.img --partition partition_universal.json \
       --fastboot fastboot.yaml
@@ -13,6 +16,7 @@ Usage:
 
 import argparse
 import json
+import tempfile
 import os
 import subprocess
 import sys
@@ -50,6 +54,66 @@ def load_yaml(path: str) -> dict:
         return yaml.safe_load(f)
 
 
+_PROGRESS_THRESHOLD = 64 * 1024 * 1024   # show progress for partitions >= 64 MB
+_COPY_CHUNK = 4 * 1024 * 1024            # 4 MB per read/write
+
+def _copy_with_progress(src_f, dst_path: Path, size: int, label: str):
+    """Copy `size` bytes from current position of src_f to dst_path, with progress for large parts."""
+    show = size >= _PROGRESS_THRESHOLD
+    written = 0
+    with open(dst_path, 'wb') as dst:
+        remaining = size
+        while remaining > 0:
+            chunk = src_f.read(min(_COPY_CHUNK, remaining))
+            if not chunk:
+                break
+            dst.write(chunk)
+            written += len(chunk)
+            remaining -= len(chunk)
+            if show:
+                pct = written * 100 // size
+                print(f"\r  [{label}] {written / (1024**2):.0f} / {size / (1024**2):.0f} MB  ({pct}%)",
+                      end='', flush=True)
+    if show:
+        print()  # newline after progress line
+
+
+def _decompress_image(img_path: str) -> tuple:
+    """If img_path is .zst, decompress to a temp file via zstd.
+
+    Returns (path, is_temp) where is_temp indicates the caller should delete
+    the file when done.
+    """
+    if not img_path.endswith('.zst'):
+        return img_path, False
+
+    cmd = ['zstd', '-d', '-T0', '-c', img_path]
+
+    tmp = tempfile.NamedTemporaryFile(suffix='.img', delete=False)
+    print(f"[extract] decompressing {img_path} -> {tmp.name} ...")
+    CHUNK = 4 * 1024 * 1024  # 4 MB
+    written = 0
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    try:
+        while True:
+            chunk = proc.stdout.read(CHUNK)
+            if not chunk:
+                break
+            tmp.write(chunk)
+            written += len(chunk)
+            print(f"\r[extract] decompressing... {written / (1024 ** 3):.2f} GB", end='', flush=True)
+    finally:
+        proc.stdout.close()
+        proc.wait()
+    if proc.returncode != 0:
+        tmp.close()
+        os.unlink(tmp.name)
+        sys.exit(f"ERROR: decompression failed (exit {proc.returncode})")
+    tmp.close()
+    print(f"\r[extract] decompressed: {written:,} bytes        ")
+    return tmp.name, True
+
+
 # ---------------------------------------------------------------------------
 # Feature 1: Extract partition files from a GPT image
 # ---------------------------------------------------------------------------
@@ -69,61 +133,63 @@ def _file_path(image: str) -> str:
 
 def extract_partitions(img_path: str, partition_json: str,
                        only: set = None, skip: set = None):
-    """Extract each partition from the image into ./temp using offset+size declared in the JSON."""
+    """Extract each partition from the image into ./temp using offset+size declared in the JSON.
+
+    Supports plain images and .xz / .gz compressed images.
+    Compressed images are decompressed to a temporary file first.
+    """
     config = load_json(partition_json)
     partitions = config.get('partitions', [])
-    img_size = os.path.getsize(img_path)
 
     TEMP_DIR.mkdir(exist_ok=True)
 
-    print(f"[extract] image    : {img_path}  ({img_size:,} bytes)")
-    print(f"[extract] partition: {partition_json}")
-    print(f"[extract] output   : {TEMP_DIR}")
-    print()
+    work_img, is_temp = _decompress_image(img_path)
+    try:
+        img_size = os.path.getsize(work_img)
+        print(f"[extract] image    : {img_path}  ({img_size:,} bytes)")
+        print(f"[extract] partition: {partition_json}")
+        print(f"[extract] output   : {TEMP_DIR}")
+        print()
 
-    with open(img_path, 'rb') as img_f:
-        for part in partitions:
-            name = part.get('name', '')
-            image_rel = part.get('image', '')
-            if not image_rel:
-                print(f"  [{name}] no 'image' field, skipped")
-                continue
+        with open(work_img, 'rb') as img_f:
+            for part in partitions:
+                name = part.get('name', '')
+                image_rel = part.get('image', '')
+                if not image_rel:
+                    print(f"  [{name}] no 'image' field, skipped")
+                    continue
 
-            if only and name not in only:
-                print(f"  [{name}] skipped (not in --only list)")
-                continue
-            if skip and name in skip:
-                print(f"  [{name}] skipped (in --skip list)")
-                continue
+                if only and name not in only:
+                    print(f"  [{name}] skipped (not in --only list)")
+                    continue
+                if skip and name in skip:
+                    print(f"  [{name}] skipped (in --skip list)")
+                    continue
 
-            if Path(image_rel).name in _CURRENT_DIR_FILES:
-                print(f"  [{name}] current-dir file, skipped extraction")
-                continue
+                if Path(image_rel).name in _CURRENT_DIR_FILES:
+                    print(f"  [{name}] current-dir file, skipped extraction")
+                    continue
 
-            offset = parse_size(str(part.get('offset', '0')))
-            size = parse_size(str(part.get('size', '-')))
-            compress = part.get('compress', '')
+                offset = parse_size(str(part.get('offset', '0')))
+                size = parse_size(str(part.get('size', '-')))
+                compress_field = part.get('compress', '')
 
-            if size == -1:
-                size = img_size - offset
+                if size == -1:
+                    size = img_size - offset
+                if name == 'fsbl':
+                    size = min(size, K3_FSBL_MAX_BYTE_SIZE)
+                if offset + size > img_size:
+                    print(f"  [{name}] WARNING: offset({offset}) + size({size}) exceeds image size, truncating")
+                    size = img_size - offset
 
-            if name == 'fsbl':
-                size = min(size, K3_FSBL_MAX_BYTE_SIZE)
+                img_f.seek(offset)
 
-            if offset + size > img_size:
-                print(f"  [{name}] WARNING: offset({offset}) + size({size}) exceeds image size, truncating")
-                size = img_size - offset
-
-            img_f.seek(offset)
-            data = img_f.read(size)
-
-            if compress:
-                print(f"  [{name}] note: compress={compress} (raw data in image, no decompression applied)")
-
-            out_path = TEMP_DIR / Path(image_rel).name
-            out_path.write_bytes(data)
-
-            print(f"  [{name}] offset=0x{offset:08X}  size={size:,}  -> {out_path}")
+                out_path = TEMP_DIR / Path(image_rel).name
+                _copy_with_progress(img_f, out_path, size, name)
+                print(f"  [{name}] offset=0x{offset:08X}  size={size:,}  -> {out_path}")
+    finally:
+        if is_temp:
+            os.unlink(work_img)
 
     print()
     print("[extract] done")
