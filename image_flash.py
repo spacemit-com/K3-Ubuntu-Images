@@ -16,7 +16,6 @@ Usage:
 
 import argparse
 import json
-import tempfile
 import os
 import subprocess
 import sys
@@ -78,40 +77,53 @@ def _copy_with_progress(src_f, dst_path: Path, size: int, label: str):
         print()  # newline after progress line
 
 
-def _decompress_image(img_path: str) -> tuple:
-    """If img_path is .zst, decompress to a temp file via zstd.
+def _decompress_stream(img_path: str):
+    """Return a context manager yielding (stream, img_size_or_None).
 
-    Returns (path, is_temp) where is_temp indicates the caller should delete
-    the file when done.
+    For plain images the file is opened directly (seekable, size known).
+    For .zst images a zstd subprocess pipe is used (streaming, no temp file).
     """
-    if not img_path.endswith('.zst'):
-        return img_path, False
+    return _ImageSource(img_path)
 
-    cmd = ['zstd', '-d', '-T0', '-c', img_path]
 
-    tmp = tempfile.NamedTemporaryFile(suffix='.img', delete=False)
-    print(f"[extract] decompressing {img_path} -> {tmp.name} ...")
-    CHUNK = 4 * 1024 * 1024  # 4 MB
-    written = 0
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    try:
-        while True:
-            chunk = proc.stdout.read(CHUNK)
-            if not chunk:
-                break
-            tmp.write(chunk)
-            written += len(chunk)
-            print(f"\r[extract] decompressing... {written / (1024 ** 3):.2f} GB", end='', flush=True)
-    finally:
-        proc.stdout.close()
-        proc.wait()
-    if proc.returncode != 0:
-        tmp.close()
-        os.unlink(tmp.name)
-        sys.exit(f"ERROR: decompression failed (exit {proc.returncode})")
-    tmp.close()
-    print(f"\r[extract] decompressed: {written:,} bytes        ")
-    return tmp.name, True
+class _ImageSource:
+    """Context manager that provides either a seekable file or a zstd pipe."""
+
+    def __init__(self, img_path: str):
+        self.img_path = img_path
+        self.streaming = img_path.endswith('.zst')
+        self._proc = None
+        self._f = None
+
+    def __enter__(self):
+        if self.streaming:
+            cmd = ['zstd', '-d', '-T0', '-c', self.img_path]
+            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+            self._f = self._proc.stdout
+            self.size = None
+        else:
+            self._f = open(self.img_path, 'rb')
+            self.size = os.path.getsize(self.img_path)
+        return self
+
+    def __exit__(self, *_):
+        if self._f:
+            self._f.close()
+        if self._proc:
+            self._proc.wait()
+            if self._proc.returncode not in (0, None):
+                sys.exit(f"ERROR: zstd exited with {self._proc.returncode}")
+
+    def read(self, n):
+        return self._f.read(n)
+
+    def seek(self, offset):
+        """Seek (seekable) or discard bytes to reach offset (streaming)."""
+        if not self.streaming:
+            self._f.seek(offset)
+        else:
+            # pos is tracked externally by the caller
+            raise RuntimeError("seek() must not be called on streaming source")
 
 
 # ---------------------------------------------------------------------------
@@ -133,66 +145,123 @@ def _file_path(image: str) -> str:
 
 def extract_partitions(img_path: str, partition_json: str,
                        only: set = None, skip: set = None):
-    """Extract each partition from the image into ./temp using offset+size declared in the JSON.
+    """Extract each partition from the image into ./temp.
 
-    Supports plain images and .xz / .gz compressed images.
-    Compressed images are decompressed to a temporary file first.
+    Supports plain images (random access) and .zst compressed images
+    (streamed via zstd pipe, no temporary file required).
     """
     config = load_json(partition_json)
     partitions = config.get('partitions', [])
-
     TEMP_DIR.mkdir(exist_ok=True)
 
-    work_img, is_temp = _decompress_image(img_path)
-    try:
-        img_size = os.path.getsize(work_img)
-        print(f"[extract] image    : {img_path}  ({img_size:,} bytes)")
+    # Filter and prepare the list of partitions to extract.
+    to_extract = []
+    for part in partitions:
+        name = part.get('name', '')
+        image_rel = part.get('image', '')
+        if not image_rel:
+            print(f"  [{name}] no 'image' field, skipped")
+            continue
+        if only and name not in only:
+            print(f"  [{name}] skipped (not in --only list)")
+            continue
+        if skip and name in skip:
+            print(f"  [{name}] skipped (in --skip list)")
+            continue
+        if Path(image_rel).name in _CURRENT_DIR_FILES:
+            print(f"  [{name}] current-dir file, skipped extraction")
+            continue
+        to_extract.append(part)
+
+    with _decompress_stream(img_path) as src:
+        img_size = src.size  # None for streaming
+        size_label = f'{img_size:,} bytes' if img_size else 'streaming'
+        print(f"[extract] image    : {img_path}  ({size_label})")
         print(f"[extract] partition: {partition_json}")
         print(f"[extract] output   : {TEMP_DIR}")
         print()
 
-        with open(work_img, 'rb') as img_f:
-            for part in partitions:
+        if src.streaming:
+            # Must read forward-only: sort by offset (size==-1 partitions last)
+            to_extract.sort(key=lambda p: (
+                parse_size(str(p.get('size', '-'))) == -1,
+                parse_size(str(p.get('offset', '0'))),
+            ))
+            pos = 0  # bytes consumed from the stream so far
+            for part in to_extract:
                 name = part.get('name', '')
                 image_rel = part.get('image', '')
-                if not image_rel:
-                    print(f"  [{name}] no 'image' field, skipped")
-                    continue
-
-                if only and name not in only:
-                    print(f"  [{name}] skipped (not in --only list)")
-                    continue
-                if skip and name in skip:
-                    print(f"  [{name}] skipped (in --skip list)")
-                    continue
-
-                if Path(image_rel).name in _CURRENT_DIR_FILES:
-                    print(f"  [{name}] current-dir file, skipped extraction")
-                    continue
-
                 offset = parse_size(str(part.get('offset', '0')))
                 size = parse_size(str(part.get('size', '-')))
-                compress_field = part.get('compress', '')
+
+                # Discard bytes up to the partition offset
+                if offset > pos:
+                    skip_bytes = offset - pos
+                    _discard(src, skip_bytes)
+                    pos += skip_bytes
+
+                if size == -1:
+                    # Read until stream ends
+                    out_path = TEMP_DIR / Path(image_rel).name
+                    written = _copy_stream_to_file(src, out_path, name)
+                    pos += written
+                else:
+                    if name == 'fsbl':
+                        size = min(size, K3_FSBL_MAX_BYTE_SIZE)
+                    out_path = TEMP_DIR / Path(image_rel).name
+                    _copy_with_progress(src, out_path, size, name)
+                    pos += size
+
+                print(f"  [{name}] offset=0x{offset:08X}  size={size:,}  -> {out_path}")
+        else:
+            for part in to_extract:
+                name = part.get('name', '')
+                image_rel = part.get('image', '')
+                offset = parse_size(str(part.get('offset', '0')))
+                size = parse_size(str(part.get('size', '-')))
 
                 if size == -1:
                     size = img_size - offset
                 if name == 'fsbl':
                     size = min(size, K3_FSBL_MAX_BYTE_SIZE)
                 if offset + size > img_size:
-                    print(f"  [{name}] WARNING: offset({offset}) + size({size}) exceeds image size, truncating")
+                    print(f"  [{name}] WARNING: offset+size exceeds image, truncating")
                     size = img_size - offset
 
-                img_f.seek(offset)
-
+                src.seek(offset)
                 out_path = TEMP_DIR / Path(image_rel).name
-                _copy_with_progress(img_f, out_path, size, name)
+                _copy_with_progress(src, out_path, size, name)
                 print(f"  [{name}] offset=0x{offset:08X}  size={size:,}  -> {out_path}")
-    finally:
-        if is_temp:
-            os.unlink(work_img)
 
     print()
     print("[extract] done")
+
+
+def _discard(src, n: int):
+    """Read and discard n bytes from src."""
+    CHUNK = 4 * 1024 * 1024
+    remaining = n
+    while remaining > 0:
+        chunk = src.read(min(CHUNK, remaining))
+        if not chunk:
+            break
+        remaining -= len(chunk)
+
+
+def _copy_stream_to_file(src, dst_path: Path, label: str) -> int:
+    """Copy src until EOF into dst_path, showing progress. Returns bytes written."""
+    CHUNK = 4 * 1024 * 1024
+    written = 0
+    with open(dst_path, 'wb') as dst:
+        while True:
+            chunk = src.read(CHUNK)
+            if not chunk:
+                break
+            dst.write(chunk)
+            written += len(chunk)
+            print(f"\r  [{label}] {written / (1024**2):.0f} MB written", end='', flush=True)
+    print()
+    return written
 
 
 # ---------------------------------------------------------------------------
