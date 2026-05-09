@@ -1,5 +1,5 @@
 ---
-name: ubuntu-server-riscv64-preinstalled
+name: ubuntu-desktop-riscv64-preinstalled
 display-name: Ubuntu Server RISC-V preinstalled
 revision: 1
 architecture: riscv64
@@ -38,6 +38,7 @@ customization:
     - name: "grub-efi-riscv64"
     - name: "ubuntu-desktop"
     - name: "img-gpu-powervr"
+    - name: "chromium"
   extra-snaps:
     - name: snapd
   fstab:
@@ -69,6 +70,6 @@ customization:
 
 artifacts:
   img:
-    - name: ubuntu-26.04-preinstalled-server-riscv64.img
+    - name: ubuntu-26.04-preinstalled-desktop-riscv64.img
   manifest:
-    name: ubuntu-26.04-preinstalled-server-riscv64.manifest
+    name: ubuntu-26.04-preinstalled-desktop-riscv64.manifest

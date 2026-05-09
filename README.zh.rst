@@ -4,21 +4,58 @@ SpacemiT K3 gadget
 为 SpacemiT K3 Pico-ITX 开发板构建支持 UEFI 启动的 Ubuntu RISC-V 预装镜像，
 并通过 fastboot 完成烧写。
 
-生成的镜像以单块 GPT 磁盘布局，包含原始固件分区
-（``env``、``bootinfo``、``fsbl``、``esos``、``opensbi``、``uboot``）、
-EFI 系统分区、``CIDATA`` cloud-init 分区以及 ``ext4`` 格式的 ``writable`` 根文件系统。
-
-启动链：BootROM → FSBL → OpenSBI → EDK2 (UEFI) → GRUB → Linux
-
-说明：磁盘上只存放 U-Boot SPL 阶段产物（FSBL / bootinfo），完整的 u-boot.itb
-本体不参与运行时启动链；u-boot.itb 仅在 fastboot 烧写时由 BootROM 暂存使用。
+`English <README.rst>`_
 
 预构建镜像
 ----------
 
-如果只需要烧写开发板，从项目 GitHub Releases 或镜像站获取最新的
-``ubuntu-26.04-preinstalled-server-riscv64.img``（及其校验文件），
+如果只需要烧写开发板，从项目 GitHub Releases 获取最新的
+``ubuntu-26.04-preinstalled-desktop-riscv64.img.zst`` （及其校验文件），
 然后直接跳至 `烧写开发板`_ 章节。
+
+烧写开发板
+----------
+
+硬件准备：将 SpacemiT K3 Pico-ITX 开发板切换至刷机模式。
+
+在 Ubuntu （22.04 及之后版本）主机上安装依赖：
+
+.. code-block:: bash
+
+    sudo apt-get update
+    sudo apt-get install git ubuntu-dev-tools fastboot
+    git clone https://github.com/spacemit-com/K3-Ubuntu-Images.git gadget
+    cd gadget
+
+一键完成刷机：
+
+.. code-block:: bash
+
+    make IMG=/path/to/ubuntu-26.04-preinstalled-desktop-riscv64.img.zst all
+
+手动执行各步骤：
+
+.. code-block:: bash
+
+    # 1. 从镜像中提取各分区文件至 ./temp
+    python3 image_flash.py \
+        --img path/to/ubuntu-26.04-preinstalled-desktop-riscv64.img \
+        --partition partition_universal.json
+
+    # 2. 将 u-boot.itb(从ppa获取的) 放入 ./temp
+    #    BootROM 会通过 USB 将其加载至内存（RAM）中运行；它在 RAM 中充当临时
+    #    fastboot 服务端，不会被写入任何存储分区。
+    cp /path/to/u-boot.itb temp/u-boot.itb
+
+    # 3. 执行烧写
+    sudo python3 image_flash.py --fastboot fastboot.yaml
+
+首次启动
+--------
+
+默认账户：``ubuntu`` / ``ubuntu``。
+
+镜像内置 ``ubuntu-desktop`` 及 Chromium 浏览器。
 
 构建镜像
 --------
@@ -36,7 +73,7 @@ EFI 系统分区、``CIDATA`` cloud-init 分区以及 ``ext4`` 格式的 ``writa
 
 .. code-block:: bash
 
-    git clone <本仓库地址> gadget
+    git clone https://github.com/spacemit-com/K3-Ubuntu-Images.git gadget
     cd gadget
     make image          # 通过 ubuntu-image 进行全量构建
 
@@ -45,86 +82,75 @@ EFI 系统分区、``CIDATA`` cloud-init 分区以及 ``ext4`` 格式的 ``writa
 .. code-block:: bash
 
     make image-debug    # 带 --debug 的全量构建
-    make image-init     # 在手动定制前停止（-u perform_manual_customization）
-    make image-continue # 继续上次中断的工作目录（-r）
 
 构建产物路径::
 
-    workdir/ubuntu-26.04-preinstalled-server-riscv64.img
+    workdir/ubuntu-26.04-preinstalled-desktop-riscv64.img
 
-烧写开发板
-----------
+运行时启动链
+------------
 
-硬件准备：将 SpacemiT K3 Pico-ITX 开发板切换至 fastboot / USB 下载模式，
-主机已安装 ``fastboot``。
+::
 
-烧写流程由 ``image_flash.py`` 驱动，分两个阶段：
+                                ┌→ ESOS（管理核心，独立运行）
+    BootROM → FSBL（U-Boot SPL） ┤
+                                └→ OpenSBI → EDK2 UEFI → GRUB → Linux
 
-1. **extract（提取）** — 将 GPT 镜像按分区拆分至 ``./temp/`` 目录
-2. **flash（烧写）** — 按照 ``fastboot.yaml`` 描述的 BootROM/fastboot 序列逐分区写入
+各阶段说明：
 
-使用 Makefile 一键完成：
+- **BootROM** 读取 ``bootinfo`` 分区以定位并校验 FSBL，然后将控制权转交给它。
+- **FSBL** （``fsbl`` 分区，U-Boot SPL）完成时钟、DRAM 及外设初始化，
+  随后并行启动两个负载：
 
-.. code-block:: bash
+  - **ESOS** （``esos`` 分区）——Energy Service OS，一款面向功耗管理设计的
+    RTOS 多任务实时操作系统，运行在独立管理核心上，与应用核心的启动流程相互独立。
+  - **OpenSBI** （``opensbi`` 分区）——在应用核心上建立 SBI 运行时环境，
+    并启动下一阶段负载——EDK2。
+- **EDK2 UEFI** （``uboot`` 分区，存储 ``edk2.itb``）提供完整的 UEFI 运行环境。
+  该分区名称沿用自 U-Boot 启动的分区布局，但运行时负载实际上是 EDK2 固件，而非 U-Boot。
+- **GRUB** 由 EDK2 从 ESP 加载（``EFI/boot/bootriscv64.efi``）。
+  ESP 上的桩 ``grub.cfg`` 将 GRUB 重定向至 ``writable`` 分区上的
+  ``/boot/grub/grub.cfg``。
+- **Linux** 由 GRUB 按照 ``/boot/grub/grub.cfg`` 中的参数启动。
 
-    # 使用本地刚构建的镜像
-    make all
+u-boot.itb 的作用
+-----------------
 
-    # 使用下载的镜像
-    make IMG=/path/to/ubuntu-26.04-preinstalled-server-riscv64.img all
+``u-boot.itb`` **不参与**运行时启动链，仅在烧写阶段作为临时 fastboot 服务使用：
 
-Makefile 默认从
-``workdir/scratch/gadget/install/u-boot-spacemit/u-boot.itb``
-读取 U-Boot FIT（本地 ``make image`` 完成后自动生成）。
-烧写下载镜像时，如果该路径不存在，``make flash`` 会自动从 PPA
-拉取 ``u-boot-spacemit`` 包并解出 ``u-boot.itb``，无需手动操作。
+1. SpacemiT K3 BootROM 处于 USB 下载模式时，可通过 USB 接收一个 FIT 镜像并将其
+   完整加载到内存（RAM）中。
+2. 主机将 ``u-boot.itb``（包含 fastboot 服务端的完整 U-Boot 构建产物）上传到
+   开发板的 RAM 中。
+3. U-Boot 在 RAM 中运行，向主机暴露 fastboot 协议。
+4. 主机随后通过 ``fastboot`` 将所有 GPT/NOR 分区镜像写入目标存储介质。
+5. 下次上电时，开发板从新写入的分区按上述运行时启动链正常启动；
+   ``u-boot.itb`` 从不持久化到任何存储分区。
 
-如需指定特定的 ``u-boot.itb``，可在命令行覆盖 ``UBOOT_ITB`` 变量::
+GRUB 初始化
+------------
 
-    make UBOOT_ITB=/path/to/u-boot.itb flash
+镜像采用两阶段 GRUB 初始化方案。
 
-手动执行各步骤：
+**预置阶段（镜像构建时）：**
 
-.. code-block:: bash
+- ESP 中预置了编译好的 ``grubriscv64.efi`` 和一个最小桩 ``grub.cfg``
+  （``gadget.in/grub.cfg``），该桩配置仅将 GRUB 重定向至 ``writable``
+  分区的 ``/boot/grub/grub.cfg``。
+- ``writable`` 根文件系统中预置了一份生成好的 ``/boot/grub/grub.cfg``
+  （来自本仓库根目录的 ``grub.cfg``），可满足首次上电时的正常启动需求。
 
-    # 1. 从镜像中提取各分区文件至 ./temp
-    python3 image_flash.py \
-        --img path/to/ubuntu-26.04-preinstalled-server-riscv64.img \
-        --partition partition_universal.json
+**首次启动（运行时）：**
 
-    # 2. 将 u-boot.itb 放入 ./temp
-    #    （fastboot BootROM 暂存步骤需要此文件；不会写入运行时 flash 分区）
-    cp /path/to/u-boot.itb temp/u-boot.itb
+系统首次启动时，cloud-init 任务会自动执行：
 
-    # 3. 执行烧写
-    sudo python3 image_flash.py --fastboot fastboot.yaml
+- ``grub-install`` — 为当前运行系统安装 GRUB EFI 二进制文件，并在 UEFI NVRAM
+  中注册启动项，替换预置的通用桩文件。
+- ``update-grub`` — 根据已安装的内核、``/etc/grub.d/`` 模板及
+  ``/etc/default/grub`` 设置，重新生成 ``/boot/grub/grub.cfg``，
+  替换镜像构建时预置的文件。
 
-选择性烧写
-~~~~~~~~~~
-
-开发调试时可用 ``--only`` 和 ``--skip`` 过滤要操作的分区
-（二者互斥，支持逗号分隔多个名称）：
-
-.. code-block:: bash
-
-    # 只重刷 EFI 系统分区
-    sudo python3 image_flash.py --fastboot fastboot.yaml --only esp
-
-    # 重刷除根文件系统外的所有分区（迭代更快）
-    sudo python3 image_flash.py --fastboot fastboot.yaml --skip writable
-
-    # 提取阶段同样支持上述参数
-    python3 image_flash.py --img <img> --partition partition_universal.json --only esp
-
-当 ``--only`` 指定的分区不存在于某个分区表时，对应的 fastboot 阶段会自动跳过
-（例如 ``--only esp`` 会完全跳过 MTD/NOR 阶段，直接进入 GPT 上下文）。
-
-首次启动
---------
-
-默认账户：``ubuntu`` / ``ubuntu``。
-
-镜像内置 ``ubuntu-desktop`` 及 PowerVR GPU 用户空间驱动。
+此后每次内核升级都会自动触发 ``update-grub``，保持启动菜单与系统同步。
 
 仓库结构
 --------
@@ -132,7 +158,7 @@ Makefile 默认从
 ::
 
     image-definition.yaml       ubuntu-image classic 构建定义
-    gadget.in/                  gadget snap 源（分区布局 + 固件）
+    gadget.in/                  gadget 源（分区布局 + 固件）
         Makefile                从 spacemit/k3 PPA 拉取固件 (.deb)
         gadget.yaml             GPT 布局
         edk2.itb                EDK2 UEFI FIT（内嵌二进制）
@@ -145,5 +171,5 @@ Makefile 默认从
     Makefile                    镜像构建 + 烧写工作流入口
     image_flash.py              分区提取与 fastboot 驱动
     fastboot.yaml               fastboot 烧写流程
-    partition_universal.json    GPT 分区表（块设备）
-    partition_4M.json           MTD/NOR 分区表（启动 SPI Flash）
+    partition_universal.json    UFS/SSD的GPT分区表
+    partition_4M.json           NOR的分区表
