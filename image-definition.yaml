@@ -39,6 +39,8 @@ customization:
     - name: "ubuntu-desktop"
     - name: "img-gpu-powervr"
     - name: "chromium"
+    - name: "linux-firmware-spacemit"
+    - name: "gstreamer1.0-plugins-bad"
   extra-snaps:
     - name: snapd
   fstab:
