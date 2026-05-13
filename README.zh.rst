@@ -60,7 +60,7 @@ SpacemiT K3 gadget
 构建镜像
 --------
 
-在 Ubuntu 主机上安装构建依赖：
+在 Ubuntu 26.04 主机上安装构建依赖：
 
 .. code-block:: bash
 
@@ -92,7 +92,7 @@ SpacemiT K3 gadget
 
 ::
 
-                                ┌→ ESOS（管理核心，独立运行）
+                                ┌→ ESOS（功耗管理核 + 实时任务管理核，独立运行）
     BootROM → FSBL（U-Boot SPL） ┤
                                 └→ OpenSBI → EDK2 UEFI → GRUB → Linux
 
@@ -100,10 +100,13 @@ SpacemiT K3 gadget
 
 - **BootROM** 读取 ``bootinfo`` 分区以定位并校验 FSBL，然后将控制权转交给它。
 - **FSBL** （``fsbl`` 分区，U-Boot SPL）完成时钟、DRAM 及外设初始化，
-  随后并行启动两个负载：
+  随后串行启动如下负载：
 
-  - **ESOS** （``esos`` 分区）——Energy Service OS，一款面向功耗管理设计的
-    RTOS 多任务实时操作系统，运行在独立管理核心上，与应用核心的启动流程相互独立。
+  - **ESOS** （``esos`` 分区）——Energy Service OS，包含两个独立运行的
+    RTOS 子系统，均运行在独立管理核心上，与应用核心的启动流程相互独立：
+
+    - **功耗管理核**——一款面向功耗管理设计的 RTOS 多任务实时操作系统。
+    - **运行时实时任务管理核**——一款面向实时任务处理的 RTOS 多任务实时操作系统。
   - **OpenSBI** （``opensbi`` 分区）——在应用核心上建立 SBI 运行时环境，
     并启动下一阶段负载——EDK2。
 - **EDK2 UEFI** （``uboot`` 分区，存储 ``edk2.itb``）提供完整的 UEFI 运行环境。

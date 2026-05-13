@@ -65,7 +65,7 @@ The image ships ``ubuntu-desktop`` and Chromium.
 Build the image
 ---------------
 
-Install build dependencies on an Ubuntu host:
+Install build dependencies on an Ubuntu 26.04 host:
 
 .. code-block:: bash
 
@@ -97,7 +97,7 @@ Runtime boot chain
 
 ::
 
-                                ┌→ ESOS (management core, runs independently)
+                                ┌→ ESOS (power mgmt core + RT task core, independent)
     BootROM → FSBL (U-Boot SPL) ┤
                                 └→ OpenSBI → EDK2 UEFI → GRUB → Linux
 
@@ -106,11 +106,16 @@ Each stage in detail:
 - **BootROM** reads the ``bootinfo`` partition to locate and verify the FSBL,
   then transfers control to it.
 - **FSBL** (``fsbl`` partition, U-Boot SPL) initialises clocks, DRAM and
-  peripheral hardware, then launches two payloads in parallel:
+  peripheral hardware, then launches the following payloads in sequence:
 
-  - **ESOS** (``esos`` partition) — the Energy Service OS, a multi-task
-    RTOS designed for power management, running on a dedicated management
-    core independently of the application core boot flow.
+  - **ESOS** (``esos`` partition) — the Energy Service OS, comprising two
+    independent RTOS subsystems running on dedicated management cores,
+    independent of the application core boot flow:
+
+    - **Power Management Core** — a multi-task RTOS designed for power
+      management.
+    - **Runtime Real-Time Task Core** — a multi-task RTOS designed for
+      real-time task processing.
   - **OpenSBI** (``opensbi`` partition) — sets up the SBI runtime on the
     application core and boots the next-stage payload — EDK2.
 - **EDK2 UEFI** (``uboot`` partition, stores ``edk2.itb``) provides the full
