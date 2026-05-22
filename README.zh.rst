@@ -1,20 +1,33 @@
 SpacemiT K3 gadget
 ==================
 
-为 SpacemiT K3 Pico-ITX 开发板构建支持 UEFI 启动的 Ubuntu RISC-V 预装镜像，
-并通过 fastboot 完成烧写。
+为 SpacemiT K3 Pico-ITX 开发板构建支持 UEFI 启动的 Ubuntu RISC-V 预装镜像。
+
+本项目面向两类用户：
+
+- **只想烧录镜像**：从 `Releases <https://github.com/spacemit-com/K3-Ubuntu-Images/releases>`_
+  下载预构建包，选择烧写方式后直接烧录 → `烧写开发板`_
+- **需要定制或构建镜像**：自行构建修改后烧录 → `构建镜像`_
 
 `English <README.rst>`_
 
 预构建镜像
 ----------
 
-如果只需要烧写开发板，从项目 GitHub Releases 获取最新的
-``ubuntu-26.04-preinstalled-desktop-riscv64.img.zst`` （及其校验文件），
-然后直接跳至 `烧写开发板`_ 章节。
+从项目
+`GitHub Releases <https://github.com/spacemit-com/K3-Ubuntu-Images/releases>`_
+下载最新版本：
+
+- ``ubuntu-26.04-preinstalled-desktop-riscv64.img.zst`` —— fastboot 烧写（命令行）
+- ``ubuntu-26.04-preinstalled-desktop-riscv64.tar.gz`` —— Titantools 烧写（图形界面）
 
 烧写开发板
 ----------
+
+根据你的想法选择其中一种方式烧写即可。
+
+通过 fastboot 烧写
+~~~~~~~~~~~~~~~~
 
 硬件准备：将 SpacemiT K3 Pico-ITX 开发板切换至刷机模式。
 
@@ -50,15 +63,37 @@ SpacemiT K3 gadget
     # 3. 执行烧写
     sudo python3 image_flash.py --fastboot fastboot.yaml
 
+通过 Titantools 烧写
+~~~~~~~~~~~~~~~~~~~~
+
+`Titantools <https://www.spacemit.com/community/document/info?lang=zh&nodepath=tools/user_guide/flasher_user_guide.md>`_
+是 SpacemiT 提供的图形化刷机工具（Windows / Linux）。它直接接收固件目录或
+``.tar.gz`` 压缩包，不需要在主机安装 ``fastboot``。
+
+1. 安装适用于你的操作系统的
+   `Titantools <https://www.spacemit.com/community/document/info?lang=zh&nodepath=tools/user_guide/flasher_user_guide.md>`_
+   （Windows 安装包或 Linux AppImage）。
+2. 将开发板切换至刷机模式（按住 FDL / Download 键的同时接通电，再插入 USB 数据线）。
+3. 打开 Titantools → 研发工具 → **单机烧录**。
+4. 点击 **扫描设备** 并选中开发板。
+5. 选择下载的 ``.tar.gz`` （或解压后的目录）。
+6. 点击 **开始烧录** 并等待烧录完成。
+
 首次启动
 --------
 
 默认账户：``ubuntu`` / ``ubuntu``。
 
+.. warning::
+
+   首次登录时系统会要求立即修改密码，请设置一个强密码。
+
 镜像内置 ``ubuntu-desktop`` 及 Chromium 浏览器。
 
 构建镜像
 --------
+
+如需定制镜像内容，可自行构建。
 
 在 Ubuntu 26.04 主机上安装构建依赖：
 
@@ -86,6 +121,16 @@ SpacemiT K3 gadget
 构建产物路径::
 
     workdir/ubuntu-26.04-preinstalled-desktop-riscv64.img
+
+构建完成后，可选择烧写方式：
+
+.. code-block:: bash
+
+    # 方式 A：fastboot 烧写
+    make IMG=workdir/ubuntu-26.04-preinstalled-desktop-riscv64.img all
+
+    # 方式 B：打包为 Titantools 格式（生成 .tar.gz）再烧写
+    make IMG=workdir/ubuntu-26.04-preinstalled-desktop-riscv64.img titan
 
 运行时启动链
 ------------
@@ -119,11 +164,11 @@ SpacemiT K3 gadget
 u-boot.itb 的作用
 -----------------
 
-``u-boot.itb`` **不参与**运行时启动链，仅在烧写阶段作为临时 fastboot 服务使用：
+``u-boot.itb`` **不参与** 运行时启动链，仅在烧写阶段作为临时 fastboot 服务使用：
 
 1. SpacemiT K3 BootROM 处于 USB 下载模式时，可通过 USB 接收一个 FIT 镜像并将其
    完整加载到内存（RAM）中。
-2. 主机将 ``u-boot.itb``（包含 fastboot 服务端的完整 U-Boot 构建产物）上传到
+2. 主机将 ``u-boot.itb`` （包含 fastboot 服务端的完整 U-Boot 构建产物）上传到
    开发板的 RAM 中。
 3. U-Boot 在 RAM 中运行，向主机暴露 fastboot 协议。
 4. 主机随后通过 ``fastboot`` 将所有 GPT/NOR 分区镜像写入目标存储介质。
@@ -172,7 +217,7 @@ GRUB 初始化
     setup-scripts.sh            镜像内定制脚本（apt 升级）
     spacemit-ppa-preference     spacemit/k3 PPA 的 APT 优先级固定
     Makefile                    镜像构建 + 烧写工作流入口
-    image_flash.py              分区提取与 fastboot 驱动
+    image_flash.py              分区提取、fastboot 驱动与 titan 打包
     fastboot.yaml               fastboot 烧写流程
     partition_universal.json    UFS/SSD的GPT分区表
     partition_4M.json           NOR的分区表

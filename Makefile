@@ -11,12 +11,14 @@
 #   make extract         # extract partitions from $(IMG) into ./$(TEMP_DIR)
 #   make flash           # run fastboot flow (assumes ./$(TEMP_DIR) populated)
 #   make all             # extract + flash
-#   make clean           # remove ./$(TEMP_DIR)
+#   make titan           # extract + pack titan flasher directory + compress .tar.gz
+#   make clean           # remove ./$(TEMP_DIR) and titan output
 #   make IMG=other.img extract
 #
 # Requirements:
 #   - ubuntu-image (for image-* targets)
 #   - python3, pyyaml, fastboot in PATH (for extract/flash targets)
+#   - pigz recommended for parallel .tar.gz compression (falls back to gzip)
 #   - u-boot.itb present in CWD before flash (U-Boot FIT, not contained in the .img, needed for fastboot flash although not actually flashed to the device)
 
 # ---------------------------------------------------------------------------
@@ -35,11 +37,15 @@ TEMP_DIR     ?= temp
 GADGET_INSTALL ?= $(WORKDIR)/scratch/gadget/install
 UBOOT_ITB      ?= $(WORKDIR)/scratch/gadget/install/u-boot-spacemit/u-boot.itb
 
+TITAN_NAME ?= $(notdir $(patsubst %.img,%,$(patsubst %.img.zst,%,$(IMG))))
+TITAN_OUT  ?= .
+UBOOT_DIR  ?= $(GADGET_INSTALL)/u-boot-spacemit
+
 UBUNTU_IMAGE       ?= sudo ubuntu-image
 UBUNTU_IMAGE_FLAGS ?= --sector-size=4096 --workdir $(WORKDIR)
 
 .PHONY: help all image image-debug image-init image-continue compress \
-	extract flash check clean
+	extract flash check titan clean
 
 # ---------------------------------------------------------------------------
 # Help
@@ -57,13 +63,17 @@ help:
 	@echo "  extract          - extract partitions from \$$(IMG) into ./$(TEMP_DIR)"
 	@echo "  flash            - run fastboot flow using ./$(TEMP_DIR)"
 	@echo "  all              - extract then flash"
-	@echo "  clean            - remove ./$(TEMP_DIR)"
+	@echo "  titan            - extract + pack titan flasher dir + compress .tar.gz"
+	@echo "  clean            - remove ./$(TEMP_DIR) and titan output"
 	@echo ""
 	@echo "Variables (override on command line):"
 	@echo "  IMG=$(IMG)"
 	@echo "  PARTITION=$(PARTITION)"
 	@echo "  FASTBOOT=$(FASTBOOT)"
 	@echo "  WORKDIR=$(WORKDIR)"
+	@echo "  TITAN_NAME=$(TITAN_NAME)"
+	@echo "  TITAN_OUT=$(TITAN_OUT)"
+	@echo "  UBOOT_DIR=$(UBOOT_DIR)"
 
 # ---------------------------------------------------------------------------
 # Image build (ubuntu-image)
@@ -99,6 +109,14 @@ extract: $(IMG) $(PARTITION)
 flash: check
 	sudo $(PYTHON) $(SCRIPT) --fastboot $(FASTBOOT)
 
+titan: $(IMG) $(PARTITION)
+	$(PYTHON) $(SCRIPT) --img $(IMG) --partition $(PARTITION)
+	$(PYTHON) $(SCRIPT) --titan \
+	    --titan-name "$(TITAN_NAME)" \
+	    --uboot-dir "$(UBOOT_DIR)" \
+	    --titan-out "$(TITAN_OUT)" \
+	    --titan-temp "$(TEMP_DIR)"
+
 check:
 	@test -d $(TEMP_DIR) || { \
 	    echo "ERROR: ./$(TEMP_DIR) not found. Run 'make extract' first."; exit 1; }
@@ -112,3 +130,4 @@ check:
 
 clean:
 	rm -rf $(TEMP_DIR)
+	rm -rf $(TITAN_OUT)/$(TITAN_NAME) $(TITAN_OUT)/$(TITAN_NAME).tar.gz

@@ -9,6 +9,9 @@ Usage:
   # Compressed images (.zst) are also supported
   python image_flash.py --img card_boot.img.zst --partition partition_universal.json
 
+  # Pack titan flasher format directory and compress to .tar.gz
+  python image_flash.py --titan --titan-name MyImage --uboot-dir workdir/scratch/gadget/install/u-boot-spacemit
+
   # Extract files from image, and do image flash operation through fastboot
   python image_flash.py --img card_boot.img --partition partition_universal.json \
       --fastboot fastboot.yaml
@@ -420,8 +423,159 @@ def run_flash(fastboot_yaml: str, only: set = None, skip: set = None):
 
 
 # ---------------------------------------------------------------------------
+# Feature 3: Pack titan flasher format directory + compress to .tar.gz
+# ---------------------------------------------------------------------------
+
+# Files to exclude when copying from temp/ into the titan directory.
+_TITAN_EXCLUDE = {'flash.txt'}
+
+# Rename map applied to files copied from temp/.
+_TITAN_RENAME = {}
+
+# Files copied from the uboot install dir into titan/factory/.
+_FACTORY_FILES = ('FSBL.bin', 'bootinfo_block.bin', 'bootinfo_spinand.bin', 'bootinfo_spinor.bin')
+
+# Files copied from the uboot install dir into titan/ root.
+_UBOOT_ROOT_FILES = ('u-boot.itb',)
+
+
+def _truncate_titan_files(titan_dir: Path):
+    """Truncate partition image files to fit the tightest partition size constraint.
+
+    Scans all partition_*.json files inside titan_dir, builds a map of
+    filename -> minimum partition size across all tables, then truncates any
+    file that is larger than its allowed size.  This is needed because files
+    are extracted from a GPT image where partitions are larger (e.g. esos=3M)
+    than on MTD devices (e.g. esos=1M in partition_4M.json).
+    """
+    # Build filename -> minimum size map from all partition tables in titan_dir.
+    size_map: dict = {}  # basename -> min allowed bytes
+    for cfg_path in sorted(titan_dir.glob('partition_*.json')):
+        config = load_json(str(cfg_path))
+        for part in config.get('partitions', []):
+            image = part.get('image', '')
+            if not image:
+                continue
+            size = parse_size(str(part.get('size', '-')))
+            if size <= 0:
+                continue
+            fname = Path(image).name
+            if fname not in size_map or size < size_map[fname]:
+                size_map[fname] = size
+
+    # Truncate files that exceed their tightest constraint.
+    for fname, max_size in sorted(size_map.items()):
+        for candidate in (titan_dir / fname, titan_dir / 'factory' / fname):
+            if not candidate.exists():
+                continue
+            actual = candidate.stat().st_size
+            if actual > max_size:
+                rel = candidate.relative_to(titan_dir)
+                print(f"  truncate {rel}  {actual / 1024:.0f}K -> {max_size / 1024:.0f}K")
+                data = candidate.read_bytes()[:max_size]
+                candidate.write_bytes(data)
+
+
+def pack_titan(temp_dir: Path, uboot_dir: Path, name: str, out_dir: Path):
+    """Pack extracted partitions into a titan flasher directory and compress.
+
+    Directory layout produced:
+      <out_dir>/<name>/
+        env.bin, esos.itb, esp.vfat, fw_dynamic.itb, edk2.itb, rootfs.ext4 ...
+        factory/
+          FSBL.bin, bootinfo_block.bin, bootinfo_spinand.bin, bootinfo_spinor.bin
+        u-boot.itb
+        fastboot.yaml
+        partition_*.json
+      <out_dir>/<name>.tar.gz  (parallel-compressed with pigz when available)
+    """
+    import shutil
+
+    titan_dir = out_dir / name
+    print(f"[titan] output dir : {titan_dir}")
+    titan_dir.mkdir(parents=True, exist_ok=True)
+
+    # ---- 1. Copy partition files from temp/ --------------------------------
+    print(f"[titan] copying partitions from {temp_dir} ...")
+    for src in sorted(temp_dir.iterdir()):
+        if src.name in _TITAN_EXCLUDE:
+            print(f"  skip  {src.name}")
+            continue
+        dst_name = _TITAN_RENAME.get(src.name, src.name)
+        dst = titan_dir / dst_name
+        if src.is_file():
+            print(f"  copy  {src.name}" + (f"  ->  {dst_name}" if dst_name != src.name else ""))
+            shutil.copy2(src, dst)
+        elif src.is_dir():
+            print(f"  copy  {src.name}/  ->  {dst_name}/")
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+
+    # ---- 2. Add files from the uboot install directory ---------------------
+    factory_dir = titan_dir / 'factory'
+    factory_dir.mkdir(exist_ok=True)
+
+    print(f"[titan] copying u-boot files from {uboot_dir} ...")
+    for fname in _UBOOT_ROOT_FILES:
+        src = uboot_dir / fname
+        dst = titan_dir / fname
+        if src.exists():
+            print(f"  copy  {fname}")
+            shutil.copy2(src, dst)
+        else:
+            print(f"  WARN  {fname} not found in {uboot_dir}, skipped")
+
+    for fname in _FACTORY_FILES:
+        src = uboot_dir / fname
+        dst = factory_dir / fname
+        if src.exists():
+            print(f"  copy  factory/{fname}")
+            shutil.copy2(src, dst)
+        else:
+            print(f"  WARN  factory/{fname} not found in {uboot_dir}, skipped")
+
+    # ---- 3. Copy workspace config files ------------------------------------
+    print(f"[titan] copying config files ...")
+    config_sources = sorted(Path('.').glob('partition_*.json')) + [Path('fastboot.yaml')]
+    for cfg in config_sources:
+        if cfg.exists():
+            print(f"  copy  {cfg.name}")
+            shutil.copy2(cfg, titan_dir / cfg.name)
+
+    # ---- 4. Truncate files to fit the smallest partition size ---------------
+    # Some files are extracted from a large GPT partition slot (e.g. esos 3M)
+    # but must fit into a smaller MTD partition (e.g. esos 1M).  Scan every
+    # partition_*.json that was just copied into the titan dir and truncate any
+    # file that exceeds its tightest size constraint.
+    print(f"[titan] checking partition size constraints ...")
+    _truncate_titan_files(titan_dir)
+
+    print(f"\n[titan] directory ready: {titan_dir}")
+
+    # ---- 5. Compress in parallel -------------------------------------------
+    archive = out_dir / f"{name}.tar.gz"
+    print(f"[titan] compressing -> {archive}")
+
+    pigz_bin = shutil.which('pigz')
+    if pigz_bin:
+        cmd = ['tar', '-I', pigz_bin, '-cf', str(archive), '-C', str(titan_dir), '.']
+    else:
+        cmd = ['tar', '-czf', str(archive), '-C', str(titan_dir), '.']
+    print(f"  $ {' '.join(cmd)}")
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        sys.exit(f"ERROR: compression failed (exit {result.returncode})")
+
+    print(f"[titan] archive  : {archive}")
+    print(f"[titan] done")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+# Default path to the u-boot gadget install directory (override with --uboot-dir).
+GADGET_INSTALL_DEFAULT = 'workdir/scratch/gadget/install/u-boot-spacemit'
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -436,6 +590,21 @@ def main():
                         help='Only flash these comma-separated partition names, e.g. --only esp')
     parser.add_argument('--skip', metavar='PART[,PART...]',
                         help='Skip these comma-separated partition names, e.g. --skip writable')
+
+    # titan flasher pack options
+    parser.add_argument('--titan', action='store_true',
+                        help='Pack titan flasher format directory and compress to .tar.gz')
+    parser.add_argument('--titan-name', default='',
+                        help='Base name for the titan output directory/archive '
+                             '(default: derived from --img basename)')
+    parser.add_argument('--uboot-dir', default=GADGET_INSTALL_DEFAULT,
+                        help='Path to the u-boot install directory containing '
+                             'u-boot.itb, FSBL.bin, bootinfo_*.bin '
+                             f'(default: {GADGET_INSTALL_DEFAULT})')
+    parser.add_argument('--titan-out', default='.',
+                        help='Output directory for the titan archive (default: .)')
+    parser.add_argument('--titan-temp', default=str(TEMP_DIR),
+                        help=f'Temp directory with extracted partition files (default: {TEMP_DIR})')
 
     args = parser.parse_args()
 
@@ -456,6 +625,25 @@ def main():
 
     if args.fastboot:
         run_flash(args.fastboot, only=only, skip=skip)
+        did_something = True
+
+    if args.titan:
+        titan_name = args.titan_name
+        if not titan_name:
+            if args.img:
+                stem = Path(args.img).name
+                for ext in ('.zst', '.img'):
+                    if stem.endswith(ext):
+                        stem = stem[:-len(ext)]
+                titan_name = stem
+            else:
+                parser.error('--titan requires either --titan-name or --img to derive a name')
+        pack_titan(
+            temp_dir=Path(args.titan_temp),
+            uboot_dir=Path(args.uboot_dir),
+            name=titan_name,
+            out_dir=Path(args.titan_out),
+        )
         did_something = True
 
     if not did_something:

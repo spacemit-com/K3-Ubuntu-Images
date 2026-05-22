@@ -2,7 +2,15 @@ SpacemiT K3 gadget
 ==================
 
 Build a UEFI-bootable Ubuntu RISC-V preinstalled image for the SpacemiT K3
-Pico-ITX board and flash it through fastboot.
+Pico-ITX board.
+
+This project serves two kinds of users:
+
+- **Flash only** — download a prebuilt package from
+  `Releases <https://github.com/spacemit-com/K3-Ubuntu-Images/releases>`_ and
+  flash the board → `Flash a board`_
+- **Build / customise** — modify and rebuild the image from source →
+  `Build the image`_
 
 `中文文档 <README.zh.rst>`_
 
@@ -14,12 +22,21 @@ EFI System Partition, a ``CIDATA`` cloud-init partition and an ``ext4``
 Prebuilt images
 ---------------
 
-If you only want to flash a board, grab the latest
-``ubuntu-26.04-preinstalled-desktop-riscv64.img.zst`` (and its checksum)
-from the project's GitHub Releases, then jump to `Flash a board`_.
+Download the latest release from
+`GitHub Releases <https://github.com/spacemit-com/K3-Ubuntu-Images/releases>`_:
+
+- ``ubuntu-26.04-preinstalled-desktop-riscv64.img.zst`` — for fastboot
+  (command-line)
+- ``ubuntu-26.04-preinstalled-desktop-riscv64.tar.gz`` — for Titantools
+  (GUI)
 
 Flash a board
 -------------
+
+Pick either method below.
+
+Flash via fastboot
+~~~~~~~~~~~~~~~~~~
 
 Hardware: put the SpacemiT K3 Pico-ITX board into flash mode.
 
@@ -55,15 +72,39 @@ Run the steps manually:
     # 3. Flash
     sudo python3 image_flash.py --fastboot fastboot.yaml
 
+Flash with Titantools
+~~~~~~~~~~~~~~~~~~~~~
+
+`Titantools <https://www.spacemit.com/community/document/info?lang=en&nodepath=tools/user_guide/flasher_user_guide.md>`_
+is SpacemiT’s graphical flashing suite (Windows / Linux).  It accepts a
+firmware directory or a ``.tar.gz`` archive without requiring ``fastboot``
+on the host.
+
+1. Install `Titantools <https://www.spacemit.com/community/document/info?lang=en&nodepath=tools/user_guide/flasher_user_guide.md>`_
+   for your OS (Windows installer or Linux AppImage).
+2. Put the board into flashing mode (hold FDL / Download button while
+   powering on, then connect the USB cable).
+3. Open Titantools → **Dev Tools** →  **USB Download**.
+4. Click **Scan Device** and select your board.
+5. Select the downloaded ``.tar.gz`` (or point to the unpacked directory).
+6. Click **Start Flashing** and wait for completion.
+
 First boot
 ----------
 
 Default credentials: ``ubuntu`` / ``ubuntu``.
 
+.. warning::
+
+   You will be prompted to change the password on first login.  Choose a
+   strong password immediately.
+
 The image ships ``ubuntu-desktop`` and Chromium.
 
 Build the image
 ---------------
+
+To customise the image, build it from source.
 
 Install build dependencies on an Ubuntu 26.04 host:
 
@@ -91,6 +132,16 @@ Useful build variants:
 The image is produced at::
 
     workdir/ubuntu-26.04-preinstalled-desktop-riscv64.img
+
+After building, choose a flashing method:
+
+.. code-block:: bash
+
+    # Option A: flash via fastboot
+    make IMG=workdir/ubuntu-26.04-preinstalled-desktop-riscv64.img all
+
+    # Option B: pack as Titantools format (.tar.gz) then flash
+    make IMG=workdir/ubuntu-26.04-preinstalled-desktop-riscv64.img titan
 
 Runtime boot chain
 ------------------
@@ -188,7 +239,7 @@ Repository layout
     setup-scripts.sh            in-image customization (apt upgrade)
     spacemit-ppa-preference     APT pin for spacemit/k3 PPA
     Makefile                    image build + flash workflow entry points
-    image_flash.py              extract & fastboot driver
+    image_flash.py              extract, fastboot driver, and titan pack
     fastboot.yaml               fastboot flash flow
     partition_universal.json    GPT partition table (UFS/SSD)
     partition_4M.json           NOR partition table
