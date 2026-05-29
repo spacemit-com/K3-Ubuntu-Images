@@ -99,6 +99,13 @@ Default credentials: ``ubuntu`` / ``ubuntu``.
    You will be prompted to change the password on first login.  Choose a
    strong password immediately.
 
+Ensure you install the latest firmware from the SpacemiT PPA otherwise **reboot will fail**
+
+.. code-block:: bash
+
+    sudo apt-get update
+    sudo apt-get install linux-firmware-spacemit
+
 The image ships ``ubuntu-desktop`` and Chromium.
 
 Build the image
