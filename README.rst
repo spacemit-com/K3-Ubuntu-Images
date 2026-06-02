@@ -99,6 +99,14 @@ Default credentials: ``ubuntu`` / ``ubuntu``.
    You will be prompted to change the password on first login.  Choose a
    strong password immediately.
 
+.. note::
+
+   Before using the image, check the `Release Notes
+   <https://github.com/spacemit-com/K3-Ubuntu-Images/releases>`_ for the
+   version you downloaded.  Each release may document known issues and
+   required post-flash steps (e.g. firmware updates) that are specific to
+   that release.
+
 The image ships ``ubuntu-desktop`` and Chromium.
 
 Build the image

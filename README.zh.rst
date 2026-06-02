@@ -88,6 +88,12 @@ SpacemiT K3 gadget
 
    首次登录时系统会要求立即修改密码，请设置一个强密码。
 
+.. note::
+
+   使用前请查阅你所下载版本对应的
+   `Release Notes <https://github.com/spacemit-com/K3-Ubuntu-Images/releases>`_\ 。
+   每个版本可能记录了该版本特有的已知问题及烧录后必要的修复步骤（例如固件更新）。
+
 镜像内置 ``ubuntu-desktop`` 及 Chromium 浏览器。
 
 构建镜像
