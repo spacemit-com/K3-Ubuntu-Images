@@ -53,8 +53,13 @@ install/opensbi:
 	rm -rf build
 
 install/edk2:
+	rm -rf build
+	mkdir build
+	cd build && pull-ppa-debs --ppa=spacemit/k3 -a riscv64 edk2-spacemit $(SERIES)
+	cd build && dpkg -x edk2-spacemit*.deb edk2-spacemit/
 	mkdir -p $(DESTDIR)/edk2
-	cp edk2.itb $(DESTDIR)/edk2/edk2.itb
+	cp build/edk2-spacemit/usr/lib/uefi/spacemit/edk2.itb $(DESTDIR)/edk2/
+	rm -rf build
 
 install/u-boot:
 	rm -rf build
