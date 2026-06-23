@@ -7,6 +7,7 @@ chpasswd:
                  G4d7tSKBbgfFU/yzjLRx5N3/px8FKUNk4Di27ixyrDnrEn.wIrr8."
       type: hash
 runcmd:
+  - echo "yes" > /etc/flash-kernel/ignore-efi
   - FK_IGNORE_EFI=yes flash-kernel
   - grub-install
   - update-grub
