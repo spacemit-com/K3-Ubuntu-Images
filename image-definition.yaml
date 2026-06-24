@@ -41,6 +41,8 @@ customization:
     - name: "chromium"
     - name: "linux-firmware-spacemit"
     - name: "gstreamer1.0-plugins-bad"
+    - name: "edk2-spacemit"
+    - name: "spacemit-ec-firmware"
   extra-snaps:
     - name: snapd
   fstab:
