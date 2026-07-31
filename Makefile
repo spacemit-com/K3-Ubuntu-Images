@@ -81,7 +81,7 @@ help:
 
 image:
 	sudo rm -rf $(WORKDIR)
-	$(UBUNTU_IMAGE) --workdir $(WORKDIR) classic $(IMG_DEF)
+	$(UBUNTU_IMAGE) $(UBUNTU_IMAGE_FLAGS) classic $(IMG_DEF)
 
 image-debug:
 	sudo rm -rf $(WORKDIR)

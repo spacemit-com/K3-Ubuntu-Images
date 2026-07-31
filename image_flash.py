@@ -436,7 +436,10 @@ _TITAN_RENAME = {}
 _FACTORY_FILES = ('FSBL.bin', 'bootinfo_block.bin', 'bootinfo_spinand.bin', 'bootinfo_spinor.bin')
 
 # Files copied from the uboot install dir into titan/ root.
+# ec.bin comes from gadget.in install/ec (spacemit-ec-firmware), placed in a
+# separate ec/ subdir — NOT mixed into u-boot-spacemit/.
 _UBOOT_ROOT_FILES = ('u-boot.itb',)
+_EC_FILES = ('ec.bin',)
 
 
 def _truncate_titan_files(titan_dir: Path):
@@ -523,6 +526,19 @@ def pack_titan(temp_dir: Path, uboot_dir: Path, name: str, out_dir: Path):
             shutil.copy2(src, dst)
         else:
             print(f"  WARN  {fname} not found in {uboot_dir}, skipped")
+
+    # ec.bin lives in a separate ec/ subdir of the gadget install tree (gadget.in
+    # install/ec → spacemit-ec-firmware). Copy to titan root (flat, matches
+    # fastboot.yaml `stage: ec.bin`). Skip if absent (no EC board).
+    ec_dir = uboot_dir.parent / 'ec'
+    for fname in _EC_FILES:
+        src = ec_dir / fname
+        dst = titan_dir / fname
+        if src.exists():
+            print(f"  copy  {fname}  (from ec/)")
+            shutil.copy2(src, dst)
+        else:
+            print(f"  WARN  {fname} not found in {ec_dir}, skipped")
 
     for fname in _FACTORY_FILES:
         src = uboot_dir / fname

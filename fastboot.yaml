@@ -40,6 +40,17 @@ actions: # 刷机操作的定义
       skip_when: "not temp.version"
       timeout:
         seconds: 1
+  - stage:
+      file: 'ec.bin'
+      skip_fail: true
+      timeout:
+        seconds: 30
+      retry: 3
+  - oem:
+      args: 'ec:flash'
+      skip_fail: true
+      timeout:
+        minutes: 3
   - getvar:
       args: 'mtd-size'
       set_var: 'size0'

@@ -33,16 +33,17 @@ customization:
     - name: "spacemit/k3"
       fingerprint: "B4DD2D28C9C3837D30CD7EBAE6853B171243C347"
       keep-enabled: true
+    - name: "spacemit/k3-preview"
+      fingerprint: "B4DD2D28C9C3837D30CD7EBAE6853B171243C347"
+      keep-enabled: true
   extra-packages:
     - name: "flash-kernel"
     - name: "grub-efi-riscv64"
     - name: "ubuntu-desktop"
-    - name: "img-gpu-powervr"
     - name: "chromium"
-    - name: "linux-firmware-spacemit"
     - name: "gstreamer1.0-plugins-bad"
-    - name: "edk2-spacemit"
-    - name: "spacemit-ec-firmware"
+    - name: "spacemit-hardware-support"
+
   extra-snaps:
     - name: snapd
   fstab:
