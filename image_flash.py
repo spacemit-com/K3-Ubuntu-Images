@@ -18,6 +18,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -479,12 +480,41 @@ def _truncate_titan_files(titan_dir: Path):
                 candidate.write_bytes(data)
 
 
+def _file_md5(path: Path, chunk_size: int = 1 << 20) -> str:
+    """Streaming MD5 of a file (avoids loading multi-GB images into RAM)."""
+    h = hashlib.md5()
+    with path.open('rb') as fh:
+        for block in iter(lambda: fh.read(chunk_size), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _generate_md5sums(titan_dir: Path):
+    """Write md5sums.txt with the md5 of every file packed into the tar.gz.
+
+    Uses './'-prefixed relative paths to match the tar layout
+    ('tar -C <dir> .'), so after extraction `md5sum -c md5sums.txt` works.
+    The checksum file itself is never included in its own list.
+    """
+    entries = []
+    for f in sorted(titan_dir.rglob('*')):
+        if not f.is_file():
+            continue
+        rel = f.relative_to(titan_dir).as_posix()
+        if rel == 'md5sums.txt':
+            continue
+        entries.append(f"{_file_md5(f)}  ./{rel}")
+    (titan_dir / 'md5sums.txt').write_text('\n'.join(entries) + '\n')
+    print(f"[titan] generated md5sums.txt ({len(entries)} files)")
+
+
 def pack_titan(temp_dir: Path, uboot_dir: Path, name: str, out_dir: Path):
     """Pack extracted partitions into a titan flasher directory and compress.
 
     Directory layout produced:
       <out_dir>/<name>/
         env.bin, esos.itb, esp.vfat, fw_dynamic.itb, edk2.itb, rootfs.ext4 ...
+        md5sums.txt          (md5 of every file, for post-flash verification)
         factory/
           FSBL.bin, bootinfo_block.bin, bootinfo_spinand.bin, bootinfo_spinor.bin
         u-boot.itb
@@ -566,6 +596,7 @@ def pack_titan(temp_dir: Path, uboot_dir: Path, name: str, out_dir: Path):
     _truncate_titan_files(titan_dir)
 
     print(f"\n[titan] directory ready: {titan_dir}")
+    _generate_md5sums(titan_dir)
 
     # ---- 5. Compress in parallel -------------------------------------------
     archive = out_dir / f"{name}.tar.gz"
