@@ -272,15 +272,23 @@ def _copy_stream_to_file(src, dst_path: Path, label: str) -> int:
 # Feature 2: Parse fastboot.yaml and execute fastboot commands directly
 # ---------------------------------------------------------------------------
 
-def _run(cmd: list, retry: int = 1):
-    """Run a fastboot command, retrying up to `retry` times on failure."""
+def _run(cmd: list, retry: int = 1, skip_fail: bool = False) -> bool:
+    """Run a fastboot command, retrying up to `retry` times on failure.
+
+    Returns True on success, False on failure. When skip_fail is set, a
+    command that keeps failing after all retries is logged and skipped
+    (returns False) instead of aborting the whole flash flow.
+    """
     print(f"  $ {' '.join(cmd)}")
     for attempt in range(1, retry + 1):
         result = subprocess.run(cmd)
         if result.returncode == 0:
-            return
+            return True
         if attempt < retry:
             print(f"  [retry {attempt}/{retry}] command failed, retrying...")
+    if skip_fail:
+        print(f"  [skip_fail] command failed after {retry} attempt(s): {' '.join(cmd)}")
+        return False
     sys.exit(f"ERROR: command failed after {retry} attempt(s): {' '.join(cmd)}")
 
 
@@ -378,13 +386,13 @@ def _execute_actions(actions: list, log: list,
             cfg = action['getvar']
             cmd = ['fastboot', 'getvar', cfg['args']]
             log.append(' '.join(cmd))
-            _run(cmd, cfg.get('retry', 1))
+            _run(cmd, cfg.get('retry', 1), skip_fail=cfg.get('skip_fail', False))
 
         elif 'stage' in action:
             cfg = action['stage']
             cmd = ['fastboot', 'stage', str(TEMP_DIR / Path(cfg['file']).name)]
             log.append(' '.join(cmd))
-            _run(cmd, cfg.get('retry', 1))
+            _run(cmd, cfg.get('retry', 1), skip_fail=cfg.get('skip_fail', False))
 
         elif 'continue' in action:
             cmd = ['fastboot', 'continue']
@@ -396,7 +404,7 @@ def _execute_actions(actions: list, log: list,
             cfg = action['oem']
             cmd = ['fastboot', 'oem'] + cfg['args'].split()
             log.append(' '.join(cmd))
-            _run(cmd, cfg.get('retry', 1))
+            _run(cmd, cfg.get('retry', 1), skip_fail=cfg.get('skip_fail', False))
 
         elif 'multi_flash' in action:
             cfg = action['multi_flash'] or {}

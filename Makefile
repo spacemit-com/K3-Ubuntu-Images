@@ -125,6 +125,12 @@ check:
 	    $(MAKE) -C gadget.in install/u-boot DESTDIR=../$(GADGET_INSTALL); \
 	fi
 	@cp $(UBOOT_ITB) $(TEMP_DIR)/u-boot.itb
+	@if [ ! -f "$(TEMP_DIR)/ec.bin" ]; then \
+	    echo "INFO: ec.bin not found, fetching from PPA..."; \
+	    $(MAKE) -C gadget.in install/ec DESTDIR=../$(GADGET_INSTALL) >/dev/null 2>&1 || true; \
+	    cp $(GADGET_INSTALL)/ec/ec.bin $(TEMP_DIR)/ec.bin 2>/dev/null || \
+	        echo "WARN: ec.bin unavailable (no EC firmware); 'stage ec.bin' will be skipped"; \
+	fi
 	@command -v fastboot >/dev/null || { \
 	    echo "ERROR: fastboot not in PATH."; exit 1; }
 
