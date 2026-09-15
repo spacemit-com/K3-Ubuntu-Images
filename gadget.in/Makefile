@@ -98,13 +98,14 @@ install/u-boot:
 	mkdir build
 	cd build && $(call pull_pkg,u-boot-spacemit)
 	cd build && dpkg -x u-boot-spacemit*.deb u-boot-spacemit/
+	cd build && dpkg -x u-boot-spl-spacemit*.deb u-boot-spl-spacemit/
 	mkdir -p $(DESTDIR)/u-boot-spacemit
-	cp build/u-boot-spacemit/usr/lib/u-boot/spacemit/bootinfo_block.bin $(DESTDIR)/u-boot-spacemit/
-	cp build/u-boot-spacemit/usr/lib/u-boot/spacemit/bootinfo_spinand.bin $(DESTDIR)/u-boot-spacemit/
-	cp build/u-boot-spacemit/usr/lib/u-boot/spacemit/bootinfo_spinor.bin $(DESTDIR)/u-boot-spacemit/
-	cp build/u-boot-spacemit/usr/lib/u-boot/spacemit/env.bin $(DESTDIR)/u-boot-spacemit/
+	cp build/u-boot-spl-spacemit/usr/lib/u-boot/spacemit/bootinfo_block.bin $(DESTDIR)/u-boot-spacemit/
+	cp build/u-boot-spl-spacemit/usr/lib/u-boot/spacemit/bootinfo_spinand.bin $(DESTDIR)/u-boot-spacemit/
+	cp build/u-boot-spl-spacemit/usr/lib/u-boot/spacemit/bootinfo_spinor.bin $(DESTDIR)/u-boot-spacemit/
+	cp build/u-boot-spl-spacemit/usr/lib/u-boot/spacemit/env.bin $(DESTDIR)/u-boot-spacemit/
+	cp build/u-boot-spl-spacemit/usr/lib/u-boot/spacemit/FSBL.bin $(DESTDIR)/u-boot-spacemit/
 	cp build/u-boot-spacemit/usr/lib/u-boot/spacemit/u-boot.itb $(DESTDIR)/u-boot-spacemit/
-	cp build/u-boot-spacemit/usr/lib/u-boot/spacemit/FSBL.bin $(DESTDIR)/u-boot-spacemit/
 	rm -rf build
 
 install/esos:
