@@ -38,7 +38,7 @@
     {
       "name": "uboot",
       "offset": "2112K",
-      "size": "3M",
+      "size": "-",
       "image": "edk2.itb"
     }
   ]

@@ -60,7 +60,6 @@ actions: # 刷机操作的定义
   - getvar:
       args: 'blk-size'
       set_var: 'size1'
-      skip_fail: true
       timeout:
         seconds: 1
   - multi_flash:
