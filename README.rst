@@ -53,7 +53,7 @@ Flash in one step:
 
 .. code-block:: bash
 
-    make IMG=/path/to/ubuntu-26.04-preinstalled-desktop-riscv64.img.zst all
+    make IMG=/path/to/ubuntu-26.04-preinstalled-desktop-riscv64.img all
 
 Run the steps manually:
 
